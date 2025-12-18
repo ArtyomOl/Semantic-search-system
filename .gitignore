@@ -1,0 +1,53 @@
+# Byte-compiled / optimized / DLL files
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Virtual environments
+.venv/
+venv/
+ENV/
+env/
+
+# Distribution / packaging
+build/
+dist/
+*.egg-info/
+*.spec
+
+# Unit test / coverage reports
+.pytest_cache/
+.coverage
+htmlcov/
+
+# Logs and caches
+*.log
+*.cache
+.cache/
+
+# macOS
+.DS_Store
+
+# Editors
+.vscode/
+.idea/
+
+# SQLite databases
+*.sqlite
+*.sqlite3
+*.db
+*.db-shm
+*.db-wal
+
+# TF-IDF index artifacts
+backend/core/index/*.json
+backend/core/index/*.pkl
+backend/core/index/*.bin
+
+# Data runtime artifacts (keep sample .txt documents tracked)
+data/*.db
+data/*.sqlite*
+data/*.log
+data/*.cache
+# do not ignore data/documents/*.txt.codeassistant/
+.codeassistant
