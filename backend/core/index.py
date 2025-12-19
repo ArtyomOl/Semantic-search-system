@@ -34,6 +34,7 @@ class Index:
         
         term_docs = defaultdict(set)
         doc_freqs = {}
+        doc_lengths = {}
         
         for filename in files:
             path = os.path.join(self.data_path, filename)
@@ -42,6 +43,7 @@ class Index:
             freqs = Counter(tokens)
             doc_name = filename[:-4]
             doc_freqs[doc_name] = freqs
+            doc_lengths[doc_name] = len(tokens)
             for term in freqs:
                 term_docs[term].add(doc_name)
         
@@ -56,6 +58,8 @@ class Index:
             conn.close()
             return
         
+        avg_doc_length = sum(doc_lengths.values()) / len(doc_lengths) if doc_lengths else 1
+        
         conn = sqlite3.connect(self.db_path)
         cur = conn.cursor()
         
@@ -67,15 +71,19 @@ class Index:
         
         for doc_name, freqs in doc_freqs.items():
             norm = 0
+            doc_len = doc_lengths[doc_name]
+            length_norm = 0.5 + 0.5 * (doc_len / avg_doc_length) if avg_doc_length > 0 else 1.0
+            
             for term, tf in freqs.items():
                 df = len(term_docs[term])
                 idf = math.log((total + 1) / (df + 1)) + 1
-                tfidf = (1 + math.log(tf)) * idf
+                tfidf = (1 + math.log(tf)) * idf / length_norm
                 norm += tfidf * tfidf
             norm = math.sqrt(norm)
             cur.execute('INSERT OR REPLACE INTO doc_meta VALUES (?, ?)', (doc_name, norm))
         
         cur.execute('INSERT OR REPLACE INTO metadata VALUES ("total_docs", ?)', (total,))
+        cur.execute('INSERT OR REPLACE INTO metadata VALUES ("avg_doc_length", ?)', (int(avg_doc_length),))
         conn.commit()
         conn.close()
 
@@ -121,13 +129,33 @@ class Index:
             return []
         
         sorted_terms = sorted(vector.items(), key=lambda x: x[1], reverse=True)
-        top_stems = [term for term, score in sorted_terms[:top_n]]
         
         keywords_original = []
-        for stem in top_stems:
+        seen_stems = set()
+        seen_lower = set()
+        
+        for stem, score in sorted_terms:
+            if stem in seen_stems:
+                continue
+            
+            best_word = None
+            best_len = 0
+            
             for word in original_words:
+                word_lower = word.lower()
+                if word_lower in seen_lower:
+                    continue
                 if preprocessor.preprocess(word) == stem:
-                    keywords_original.append(word)
+                    if len(word) > best_len:
+                        best_word = word
+                        best_len = len(word)
+            
+            if best_word:
+                keywords_original.append(best_word)
+                seen_stems.add(stem)
+                seen_lower.add(best_word.lower())
+                
+                if len(keywords_original) >= top_n:
                     break
         
         return keywords_original

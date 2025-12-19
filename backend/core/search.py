@@ -77,13 +77,20 @@ class SearchEngine:
         query_terms = list(query_vector.keys())
         postings_map = self.index.get_postings(query_terms)
         
+        if not postings_map:
+            return []
+        
         scores = {}
+        term_matches = {}
+        
         for term, postings in postings_map.items():
             q_val = query_vector.get(term, 0)
             idf = self.index.get_idf(term)
             for doc_name, tf in postings:
                 if tf > 0:
-                    scores[doc_name] = scores.get(doc_name, 0) + q_val * (1 + math.log(tf)) * idf
+                    tfidf_score = (1 + math.log(tf)) * idf
+                    scores[doc_name] = scores.get(doc_name, 0) + q_val * tfidf_score
+                    term_matches[doc_name] = term_matches.get(doc_name, 0) + 1
         
         norm_q = math.sqrt(sum(v * v for v in query_vector.values()))
         if norm_q == 0:
@@ -91,6 +98,7 @@ class SearchEngine:
         
         items = []
         all_docs = {d.name: d for d in Document.get_all()}
+        query_term_count = len(query_terms)
         
         for doc_name, score in scores.items():
             norm_d = self.index.get_doc_norm(doc_name)
@@ -98,7 +106,11 @@ class SearchEngine:
                 continue
             
             similarity = score / (norm_q * norm_d)
-            if similarity <= 0.1:
+            
+            match_ratio = term_matches.get(doc_name, 0) / query_term_count
+            boosted_similarity = similarity * (1 + 0.3 * match_ratio)
+            
+            if boosted_similarity <= 0.05:
                 continue
             
             doc = all_docs.get(doc_name)
@@ -108,7 +120,7 @@ class SearchEngine:
             if filters and not doc.matches_filters(filters):
                 continue
             
-            items.append((doc, similarity))
+            items.append((doc, boosted_similarity))
         
         items.sort(key=lambda pair: pair[1], reverse=True)
         return SearchResult(items)
@@ -131,13 +143,20 @@ class SearchEngine:
         query_terms = list(query_vector.keys())
         postings_map = self.index.get_postings(query_terms)
         
+        if not postings_map:
+            return []
+        
         scores = {}
+        term_matches = {}
+        
         for term, postings in postings_map.items():
             q_val = query_vector.get(term, 0)
             idf = self.index.get_idf(term)
             for d_name, tf in postings:
                 if d_name != doc_name and tf > 0:
-                    scores[d_name] = scores.get(d_name, 0) + q_val * (1 + math.log(tf)) * idf
+                    tfidf_score = (1 + math.log(tf)) * idf
+                    scores[d_name] = scores.get(d_name, 0) + q_val * tfidf_score
+                    term_matches[d_name] = term_matches.get(d_name, 0) + 1
         
         norm_q = math.sqrt(sum(v * v for v in query_vector.values()))
         if norm_q == 0:
@@ -145,6 +164,7 @@ class SearchEngine:
         
         items = []
         all_docs = {d.name: d for d in Document.get_all()}
+        query_term_count = len(query_terms)
         
         for d_name, score in scores.items():
             norm_d = self.index.get_doc_norm(d_name)
@@ -152,12 +172,16 @@ class SearchEngine:
                 continue
             
             similarity = score / (norm_q * norm_d)
-            if similarity <= 0:
+            
+            match_ratio = term_matches.get(d_name, 0) / query_term_count
+            boosted_similarity = similarity * (1 + 0.2 * match_ratio)
+            
+            if boosted_similarity <= 0.01:
                 continue
             
             d = all_docs.get(d_name)
             if d:
-                items.append((d, similarity))
+                items.append((d, boosted_similarity))
         
         items.sort(key=lambda pair: pair[1], reverse=True)
         return SearchResult(items[:top_n])

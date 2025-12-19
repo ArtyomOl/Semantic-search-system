@@ -126,14 +126,30 @@ class Document:
             return True
         from backend.core.text_preprocess import TextPreprocessor
         preprocessor = TextPreprocessor()
+        
         doc_text = self.get_preprocessed_text()
         doc_words = set(doc_text.split())
-        kw_words = set(preprocessor.preprocess(kw) for kw in self.keywords)
-        doc_vocab = doc_words | kw_words
+        
+        kw_lower = set(kw.lower() for kw in self.keywords)
+        kw_stems = set(preprocessor.preprocess(kw) for kw in self.keywords)
+        
+        original_text = self.get_text()
+        original_words_lower = set(re.findall(r'\w+', original_text.lower()))
+        
         for f in filters:
-            stem = preprocessor.preprocess(f)
-            if stem and stem not in doc_vocab:
-                return False
+            f_lower = f.lower()
+            f_stem = preprocessor.preprocess(f)
+            
+            if f_lower in kw_lower:
+                continue
+            if f_stem and f_stem in kw_stems:
+                continue
+            if f_stem and f_stem in doc_words:
+                continue
+            if f_lower in original_words_lower:
+                continue
+            
+            return False
         return True
 
     @staticmethod
